@@ -217,3 +217,16 @@ add_executable(offboard_position_control
 target_link_libraries(offboard_position_control
     ${catkin_LIBRARIES}
 )
+
+# 起飞 / 悬停 / 环绕 / 自动降落
+add_executable(offboard_orbit
+    src/offboard_orbit.cpp
+)
+target_link_libraries(offboard_orbit
+    ${catkin_LIBRARIES}
+)
+
+install(DIRECTORY launch/
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)
+

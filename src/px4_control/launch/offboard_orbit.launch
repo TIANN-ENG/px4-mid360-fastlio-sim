@@ -1,0 +1,23 @@
+<launch>
+  <!-- 起飞 → 悬停 → 环绕 → 自动降落
+       用法： roslaunch px4_control offboard_orbit.launch
+              roslaunch px4_control offboard_orbit.launch radius:=4.0 height:=2.5 speed:=1.2 clockwise:=true
+  -->
+  <arg name="height"       default="2.0"/>   <!-- 目标高度 m -->
+  <arg name="radius"       default="3.0"/>   <!-- 环绕半径 m -->
+  <arg name="speed"        default="1.0"/>   <!-- 圆周线速度 m/s -->
+  <arg name="laps"         default="1.0"/>   <!-- 环绕圈数 -->
+  <arg name="hover_time"   default="5.0"/>   <!-- 起飞后悬停秒数 -->
+  <arg name="clockwise"    default="false"/> <!-- 是否顺时针 -->
+  <arg name="face_tangent" default="true"/>  <!-- 机头是否朝切线方向 -->
+
+  <node pkg="px4_control" type="offboard_orbit" name="offboard_orbit" output="screen">
+    <param name="height"       value="$(arg height)"/>
+    <param name="radius"       value="$(arg radius)"/>
+    <param name="speed"        value="$(arg speed)"/>
+    <param name="laps"         value="$(arg laps)"/>
+    <param name="hover_time"   value="$(arg hover_time)"/>
+    <param name="clockwise"    value="$(arg clockwise)"/>
+    <param name="face_tangent" value="$(arg face_tangent)"/>
+  </node>
+</launch>
