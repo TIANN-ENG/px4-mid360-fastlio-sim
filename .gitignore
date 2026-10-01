@@ -1,0 +1,46 @@
+# ---- catkin / ROS ----
+build/
+devel/
+install/
+logs/
+.catkin_workspace
+.catkin_tools/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ---- 编辑器 ----
+.vscode/
+.idea/
+*.swp
+
+# ---- 建图产物（FAST-LIO） ----
+*.pcd
+PCD/
+Log/*.png
+Log/*.txt
+Log/*.csv
+Log/*.pdf
+
+# ---- rosbag / 日志 ----
+*.bag
+*.log
+
+# ---- 手改备份与补丁残留 ----
+*.bak
+*.orig
+*.rej
+
+# ---- PX4 由 bootstrap.sh 拉取，不入库 ----
+PX4-Autopilot/
+
+# ---- 第三方 ROS 包（由 deps.repos 拉取，各自是独立 git 仓库） ----
+src/FAST_LIO/
+src/Mid360_px4_sim_plugin/
+src/livox_ros_driver/
+src/livox_ros_driver2/
+
+# ---- catkin_make 自动生成 ----
+src/CMakeLists.txt

@@ -1,0 +1,9 @@
+<launch>
+  <!-- 加载 URDF 到参数服务器 -->
+  <param name="robot_description" 
+         textfile="$(find iris_description)/urdf/iris_rplidar.urdf"/>
+
+  <!-- 启动 robot_state_publisher -->
+  <node name="robot_state_publisher" pkg="robot_state_publisher" 
+        type="robot_state_publisher" output="screen"/>
+</launch>

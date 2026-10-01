@@ -1,0 +1,20 @@
+# 第三方 ROS 依赖声明（vcstool）
+# 拉取： vcs import src < deps.repos
+# 更新： vcs pull src
+repositories:
+  src/FAST_LIO:
+    type: git
+    url: https://github.com/TIANN-ENG/FAST_LIO.git
+    version: mid360-px4-sim
+
+  src/Mid360_px4_sim_plugin:
+    type: git
+    url: https://github.com/TIANN-ENG/Mid360_px4_sim_plugin.git
+    version: px4-sim-fixes
+
+  # ---- 可选：仅真机接入 Livox Mid-360 时才需要 ----
+  # 仿真链路不使用 livox_ros_driver2（Gazebo 插件直接发 PointCloud2）
+  # src/livox_ros_driver2:
+  #   type: git
+  #   url: https://github.com/Livox-SDK/livox_ros_driver2.git
+  #   version: master

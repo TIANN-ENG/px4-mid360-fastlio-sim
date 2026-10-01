@@ -1,0 +1,37 @@
+diff --git a/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt b/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt
+index ce93573..9e52f3a 100644
+--- a/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt
++++ b/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt
+@@ -105,6 +105,7 @@ px4_add_romfs_files(
+ 	10017_jmavsim_iris
+ 	10018_gazebo-classic_iris_foggy_lidar
+ 	10019_gazebo-classic_omnicopter
++	10020_gazebo-classic_iris_mid360	
+ 	10030_gazebo-classic_px4vision
+ 
+ 	10040_sihsim_quadx
+diff --git a/Tools/simulation/gazebo-classic/sitl_run.sh b/Tools/simulation/gazebo-classic/sitl_run.sh
+index 741d064..2378776 100755
+--- a/Tools/simulation/gazebo-classic/sitl_run.sh
++++ b/Tools/simulation/gazebo-classic/sitl_run.sh
+@@ -101,7 +101,7 @@ if [ -x "$(command -v gazebo)" ]; then
+ 			world_path="$PX4_SITL_WORLD"
+ 		fi
+ 	fi
+-	gzserver $verbose $world_path $ros_args &
++	gzserver $verbose -s libgazebo_ros_api_plugin.so $world_path $ros_args &
+ 	SIM_PID=$!
+ 
+ 	# Check all paths in ${GAZEBO_MODEL_PATH} for specified model
+diff --git a/src/modules/simulation/simulator_mavlink/sitl_targets_gazebo-classic.cmake b/src/modules/simulation/simulator_mavlink/sitl_targets_gazebo-classic.cmake
+index 693c0fa..6db1ed6 100644
+--- a/src/modules/simulation/simulator_mavlink/sitl_targets_gazebo-classic.cmake
++++ b/src/modules/simulation/simulator_mavlink/sitl_targets_gazebo-classic.cmake
+@@ -93,6 +93,7 @@ if(gazebo_FOUND)
+ 		iris_opt_flow
+ 		iris_opt_flow_mockup
+ 		iris_rplidar
++		iris_mid360
+ 		iris_vision
+ 		omnicopter
+ 		plane

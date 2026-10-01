@@ -1,0 +1,24 @@
+<launch>
+  <!-- 先发布静态TF -->
+  <node pkg="tf" type="static_transform_publisher" name="map_odom_broadcaster" 
+        args="0 0 0 0 0 0 map odom 10" />
+
+
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+    <!-- 雷达话题，你的iris_rplidar发布的可能是 /scan，确认一下 -->
+    <param name="scan" value="/scan"/>
+    
+    <!-- 核心坐标系设置 -->
+    <param name="base_frame" value="rplidar_link"/>         <!-- 你的飞机本体坐标系 -->
+    <param name="odom_frame" value="odom"/>         <!-- 里程计坐标系 -->
+    <param name="map_frame" value="map"/>           <!-- 地图坐标系 -->
+    
+    <!-- 以下参数针对无人机（抖动较大）优化，提高建图稳定性 -->
+    <param name="delta" value="0.1"/>
+    <param name="maxUrange" value="8.0"/>
+    <param name="xmin" value="-10.0"/>
+    <param name="ymin" value="-10.0"/>
+    <param name="xmax" value="10.0"/>
+    <param name="ymax" value="10.0"/>
+  </node>
+</launch>

@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<robot name="iris_rplidar">
+
+  <!-- 1. 定义 base_link（与 Gazebo 的 iris::base_link 对应） -->
+  <link name="base_link"/>
+
+  <!-- 2. 定义 rplidar_link（与 Gazebo 的 rplidar_link 对应） -->
+  <link name="rplidar_link"/>
+
+  <!-- 3. 定义固定关节，匹配 SDF 中的 pose -->
+  <joint name="rplidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rplidar_link"/>
+    <origin xyz="0 0 0.1" rpy="0 0 0"/>   <!-- 与 SDF 的 <pose> 完全一致 -->
+  </joint>
+
+</robot>
