@@ -9,7 +9,7 @@
 
 ## 效果
 
-![建图效果](docs/images/mapping.png)
+![建图效果](docs/images/gazebo-aruco_world.png)
 
 > 截图/录屏放在 `docs/images/`，把上面这行换成自己的图。
 
@@ -135,7 +135,7 @@ rostopic hz /Odometry             # FAST-LIO 输出（有频率才算成功）
 rosrun tf tf_echo odom base_link  # TF 链路
 ```
 
-### 5. Offboard 控制（可选）
+### 5. Offboard 控制
 
 ```bash
 rosrun px4_control offboard_takeoff
@@ -190,26 +190,6 @@ rosrun tf static_transform_publisher 0.07 0 0.072 0 0.3925 0 base_link "Mid360::
   `px4_overlay/patches/` 与 `deps.repos` 中登记
 - **同步上游**：`git -C src/FAST_LIO fetch upstream && git rebase upstream/main`
 
-## 上传到 GitHub
-
-首次上传只需在网页做三件事：
-
-1. fork https://github.com/Tfly6/Mid360_px4_sim_plugin/fork
-2. fork https://github.com/hku-mars/FAST_LIO/fork
-3. 新建 https://github.com/new，名称 `px4-mid360-fastlio-sim`，
-   **不要**勾选 Add README / .gitignore / License（本地已有，勾了会导致 push 冲突）
-
-然后一条命令推送全部：
-
-```bash
-bash scripts/push_to_github.sh
-```
-
-脚本会先校验三个远程仓库是否已存在，再依次推送两个第三方分支
-（`px4-sim-fixes`、`mid360-px4-sim`）和主仓库的 `main`。
-
-日常迭代：改完自己的包后 `git add -A && git commit -m "..." && git push`；
-如果改的是 `src/FAST_LIO` 或 `src/Mid360_px4_sim_plugin`，需要分别进那两个目录提交并推送。
 
 ## FAQ
 

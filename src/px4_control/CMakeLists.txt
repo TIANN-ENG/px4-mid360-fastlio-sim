@@ -230,3 +230,10 @@ install(DIRECTORY launch/
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
 )
 
+# 视觉处理节点（ArUco 检测与位姿解算）与 ArUco 纹理生成脚本
+catkin_install_python(PROGRAMS
+    scripts/aruco_down_cam.py
+    scripts/make_aruco_texture.py
+    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+

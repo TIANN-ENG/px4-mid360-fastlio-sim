@@ -10,10 +10,56 @@
 	<arg name="fcu_protocol" default="v2.0" />
 	<arg name="respawn_mavros" default="false" />
 
+	<!-- ==================== 机载传感器外参（唯一真值来源）====================
+	     真值来自 models/iris_mid360/iris_mid360.sdf 各子模型的 <include><pose>：
+	         livox（Mid360）  (0.07, 0,  0.072)  pitch +0.3925
+	         cam  （下视相机） (0.10, 0, -0.06 )  pitch +1.5708
+	         tof  （下视测距）  (0,    0, -0.10 )  无旋转，量测方向 = 本 frame 的 -Z
+	     SDF pose 顺序为 x y z roll pitch yaw，static_transform_publisher 为
+	     x y z yaw pitch roll；因为只有 pitch 非零，两种写法字符串相同。
+	     实机换装后只需改下面三个 arg，不必动代码。
+
+	     注意：gazebo_ros_camera / libgazebo_ros_range 发出的消息里 frame_id 是
+	     Gazebo 作用域名（如 iris_mid360::vision_cam::camera_link），含 "::"，
+	     不是合法 TF 帧名 —— 算法侧请直接用下面的 TF 帧，不要拿消息里的 frame_id
+	     去查 tf。
+	-->
+	<arg name="livox_xyz_ypr" default="0.07 0 0.072 0 0.3925 0"/>
+	<arg name="cam_xyz_ypr"   default="0.10 0 -0.06 0 1.5708 0"/>
+	<arg name="tof_xyz_ypr"   default="0 0 -0.10 0 0 0"/>
+
 	<node pkg="tf"
       type="static_transform_publisher"
       name="base_to_livox"
-      args="0.07 0 0.072 0 0.3925 0 base_link livox_link 100"/>
+      args="$(arg livox_xyz_ypr) base_link livox_link 100"/>
+
+	<node pkg="tf"
+      type="static_transform_publisher"
+      name="base_to_camera"
+      args="$(arg cam_xyz_ypr) base_link camera_link 100"/>
+
+	<node pkg="tf"
+      type="static_transform_publisher"
+      name="base_to_range"
+      args="$(arg tof_xyz_ypr) base_link range_link 100"/>
+
+	<!-- 相机光学系（OpenCV 约定）：x 右、y 下、z 沿光轴朝前。
+	     cv2.aruco 的 tvec/rvec 就是这个约定，必须用 camera_optical_frame 标出，
+	     否则会和 camera_link（Gazebo 约定：+X 为光轴）差一个 90° 旋转。
+
+	     该旋转由"横向偏置实测"确定，不是猜的：
+	       相机在标识板 +x 方向 0.30m 处 → tvec = [-0.004, +0.299, 1.961]
+	       相机在标识板 +y 方向 0.30m 处 → tvec = [+0.299, -0.004, 1.961]
+	     即：世界 x 偏置落在 tvec.y、世界 y 偏置落在 tvec.x，于是
+	       optical_x = 机体 -y(右) ，optical_y = 机体 -x(后) ，optical_z = 机体 -z(下)
+	     三轴右手系自洽。若以后改了相机安装角（yaw/roll），这个四元数必须重测。
+
+	     ⚠ 早期版本这里写的是 Rx(180°)，那是仅凭"标识纹理朝向"假设推的，
+	       横向偏置实测证明 x/y 是错的 —— 换装或改安装后务必按上面的方法重测。 -->
+	<node pkg="tf"
+      type="static_transform_publisher"
+      name="camera_optical"
+      args="0 0 0 -0.5 0.5 -0.5 0.5 camera_link camera_optical_frame 100"/>
 
 	<include file="$(find mavros)/launch/node.launch">
 		<arg name="pluginlists_yaml" value="$(find mavros)/launch/px4_pluginlists.yaml" />

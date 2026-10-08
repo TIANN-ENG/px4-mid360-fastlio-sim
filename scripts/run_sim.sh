@@ -18,9 +18,10 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PX4_ROOT="${PX4_ROOT:-$HOME/PX4-Autopilot}"
 WS="$REPO_DIR"
 PX4_MODEL="${PX4_MODEL:-iris_mid360}"
+PX4_WORLD="${PX4_WORLD:-aruco_landing}"
 SESSION="${SESSION:-mid360_sim}"
 
-CMD_PX4="cd '$PX4_ROOT' && make px4_sitl gazebo-classic_${PX4_MODEL}"
+CMD_PX4="cd '$PX4_ROOT' && make px4_sitl gazebo-classic_${PX4_MODEL}__${PX4_WORLD}"
 CMD_MAVROS="source '$WS/devel/setup.bash' && roslaunch iris_description mavros_tf.launch"
 CMD_LIO="source '$WS/devel/setup.bash' && roslaunch fast_lio mapping_mid360.launch"
 #当换成实机时需要在fastlio下修改mapping_mid360.launch的指向config文件修改为实机的config —— 实机用 mid360.yaml，仿真用 my_mid360.yaml
