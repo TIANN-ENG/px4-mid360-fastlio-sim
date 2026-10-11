@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PX4 行为树可视化 · px4_control/offboard_bt</title>
+<style>
+  :root{
+    --bg:#0f1419; --panel:#161d26; --panel2:#1c2530; --line:#2a3644;
+    --tx:#dbe4ee; --tx2:#8fa3b8; --tx3:#5f7285;
+    --idle:#5f7285; --run:#f59e0b; --ok:#10b981; --fail:#ef4444;
+    --accent:#38bdf8; --accent2:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--tx);
+    font:14px/1.7 -apple-system,"Segoe UI","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  }
+  code,pre,.mono{font-family:"JetBrains Mono","Cascadia Code",Consolas,"Courier New",monospace}
+  header{
+    padding:26px 32px 20px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#141c25,#0f1419);
+  }
+  header h1{margin:0 0 6px; font-size:22px; letter-spacing:.5px}
+  header p{margin:0; color:var(--tx2); font-size:13px}
+  header .tag{
+    display:inline-block; margin-left:8px; padding:1px 8px; border-radius:99px;
+    background:#1e3a5f; color:var(--accent); font-size:11px; vertical-align:middle;
+  }
+  main{max-width:1500px; margin:0 auto; padding:0 24px 80px}
+  section{margin:34px 0}
+  h2{
+    font-size:17px; margin:0 0 14px; padding-bottom:8px;
+    border-bottom:1px solid var(--line);
+  }
+  h2 .n{
+    display:inline-block; width:24px; height:24px; line-height:24px; text-align:center;
+    background:var(--accent); color:#06121c; border-radius:6px; font-size:13px;
+    margin-right:10px; font-weight:700;
+  }
+  h3{font-size:14px; margin:22px 0 8px; color:var(--accent)}
+  p{margin:8px 0}
+  ul,ol{margin:8px 0; padding-left:22px}
+  li{margin:4px 0}
+  .muted{color:var(--tx2)}
+  .small{font-size:12.5px}
+  a{color:var(--accent)}
+
+  /* ---------- 控制条 ---------- */
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:12px 16px; margin-bottom:14px;
+  }
+  .toolbar label{color:var(--tx2); font-size:12.5px}
+  select,input[type=range]{
+    background:var(--panel2); color:var(--tx); border:1px solid var(--line);
+    border-radius:6px; padding:5px 8px; font-size:12.5px;
+  }
+  input[type=range]{padding:0; width:110px}
+  button{
+    background:var(--panel2); color:var(--tx); border:1px solid var(--line);
+    border-radius:6px; padding:6px 13px; font-size:12.5px; cursor:pointer;
+    transition:.15s;
+  }
+  button:hover{border-color:var(--accent); color:var(--accent)}
+  button.primary{background:#164e63; border-color:#0e7490; color:#e0f2fe}
+  button.primary:hover{background:#155e75}
+  .sep{width:1px; height:22px; background:var(--line)}
+  .stat{font-size:12.5px; color:var(--tx2)}
+  .stat b{color:var(--tx); font-family:"JetBrains Mono",monospace}
+
+  /* ---------- 舞台 ---------- */
+  .stage{display:grid; grid-template-columns:minmax(520px,1.15fr) minmax(430px,1fr); gap:14px}
+  @media(max-width:1150px){.stage{grid-template-columns:1fr}}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px}
+  .panel > h3{margin-top:0}
+
+  /* ---------- 树 ---------- */
+  #tree-view{overflow:auto; max-height:660px}
+  .tnode{margin:3px 0}
+  .card{
+    display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap;
+    border:1px solid var(--line); border-left-width:4px; border-radius:6px;
+    padding:4px 10px; background:var(--panel2); font-size:12.5px;
+    transition:.12s; cursor:default;
+  }
+  .card .nm{font-family:"JetBrains Mono",monospace; font-weight:600}
+  .card .ports{color:var(--tx3); font-size:11.5px; font-family:"JetBrains Mono",monospace}
+  .card .badge{
+    font-size:10.5px; padding:0 6px; border-radius:99px; background:#0b1119;
+    border:1px solid var(--line); color:var(--tx2);
+  }
+  .st-IDLE   {border-left-color:var(--idle)}
+  .st-RUNNING{border-left-color:var(--run); background:#241c0e}
+  .st-SUCCESS{border-left-color:var(--ok);  background:#0e2019}
+  .st-FAILURE{border-left-color:var(--fail);background:#2a1113}
+  .card.hot{box-shadow:0 0 0 2px rgba(56,189,248,.55)}
+  .st-RUNNING .nm{color:var(--run)}
+  .st-SUCCESS .nm{color:var(--ok)}
+  .st-FAILURE .nm{color:var(--fail)}
+  .kids{margin-left:16px; padding-left:12px; border-left:1px dashed var(--line)}
+  .curmark{color:var(--accent); font-weight:700}
+  .kind{font-size:10px; color:var(--tx3); text-transform:uppercase; letter-spacing:.5px}
+
+  /* ---------- HUD ---------- */
+  #hud{display:grid; grid-template-columns:auto 1fr; gap:2px 12px; font-size:12.5px; margin-bottom:10px}
+  #hud .k{color:var(--tx2)}
+  #hud .v{font-family:"JetBrains Mono",monospace}
+  canvas{width:100%; height:auto; background:#0b1119; border:1px solid var(--line); border-radius:8px; display:block}
+  #log{
+    margin-top:10px; height:150px; overflow:auto; background:#0b1119;
+    border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+    font-family:"JetBrains Mono",monospace; font-size:11.5px; line-height:1.6;
+  }
+  #log div{white-space:pre-wrap}
+  #log .t{color:var(--tx3)}
+  #log .ok{color:var(--ok)} #log .run{color:var(--run)} #log .warn{color:var(--fail)}
+  #log .rep{color:var(--accent2)}
+
+  /* ---------- 表格 ---------- */
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:12.5px}
+  th,td{border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); color:var(--tx2); font-weight:600}
+  td code{background:#0b1119; padding:1px 5px; border-radius:4px; font-size:11.5px}
+  tr:nth-child(even) td{background:#131a22}
+
+  pre{
+    background:#0b1119; border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; overflow:auto; font-size:12.5px; line-height:1.65; margin:10px 0;
+  }
+  pre .c{color:var(--tx3)}
+  pre .k{color:var(--accent2)}
+  pre .s{color:#7dd3a0}
+  pre .add{color:var(--ok)}
+  pre .del{color:var(--fail)}
+
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  .note{
+    border-left:3px solid var(--accent); background:#0d1c26; padding:10px 14px;
+    border-radius:0 8px 8px 0; margin:12px 0; font-size:13px;
+  }
+  .warn{border-left-color:var(--run); background:#1f1809}
+  .bad{border-left-color:var(--fail); background:#220e10}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12px; color:var(--tx2); margin:6px 0 12px}
+  .legend i{display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px}
+  .pill{display:inline-block; padding:1px 7px; border-radius:99px; font-size:11px; border:1px solid var(--line)}
+  .pill.ro{color:var(--run); border-color:#5a4410}
+  .pill.cc{color:var(--accent2)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>PX4 行为树可视化 <span class="tag">px4_control / offboard_bt</span></h1>
+  <p>点「播放」看这棵树一帧一帧地跑；再往下看它和 <code>switch</code> 状态机到底差在哪。
+     （本页所有语义都按 BehaviorTree.CPP v3.8.6 的真实行为实现，并已用真实库实测校对）</p>
+</header>
+
+<main>
+
+<!-- ==================== 1. 交互执行 ==================== -->
+<section>
+  <h2><span class="n">1</span>动手跑一遍这棵树</h2>
+
+  <div class="toolbar">
+    <label>行为树
+      <select id="tree-select">
+        <option value="orbit">orbit_mission.xml（起飞→悬停→平移→环绕→降落）</option>
+        <option value="aruco">aruco_search.xml（巡逻中找 ArUco 标记）</option>
+      </select>
+    </label>
+
+    <span id="seq-wrap" style="display:none">
+      <label>观察分支内层用
+        <select id="seq-mode">
+          <option value="reactive">ReactiveSequence（正确，推荐）</option>
+          <option value="memory">Sequence（有记忆，反例）</option>
+        </select>
+      </label>
+      <label style="margin-left:10px">
+        <input type="checkbox" id="marker-toggle"> 让标记出现在视野里
+      </label>
+    </span>
+
+    <span class="sep"></span>
+    <button id="btn-step">单步 tick</button>
+    <button id="btn-play" class="primary">▶ 播放</button>
+    <button id="btn-end">⏭ 跳到结束</button>
+    <button id="btn-reset">↺ 重置</button>
+    <label>速度 <input type="range" id="speed" min="1" max="60" value="20"></label>
+    <span class="stat small muted">（tick/秒；orbit 全程约 574 帧，20 档约 29 秒跑完）</span>
+
+    <span class="sep"></span>
+    <span class="stat">tick <b id="stat-tick">0</b></span>
+    <span class="stat">模拟时间 <b id="stat-time">0.0</b>s</span>
+    <span class="stat">根状态 <b id="stat-root">IDLE</b></span>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--idle)"></i>IDLE 还没轮到</span>
+    <span><i style="background:var(--run)"></i>RUNNING 正在做</span>
+    <span><i style="background:var(--ok)"></i>SUCCESS 做完了</span>
+    <span><i style="background:var(--fail)"></i>FAILURE 失败了</span>
+    <span><i style="background:var(--accent)"></i>蓝框＝这一帧 tick 走过的路径</span>
+  </div>
+
+  <div class="stage">
+    <div class="panel">
+      <h3>行为树（pulse：每帧 tick 的实际路径）</h3>
+      <div id="tree-view"></div>
+    </div>
+
+    <div class="panel">
+      <h3>模拟无人机（俯视图）</h3>
+      <div id="hud"></div>
+      <canvas id="map" width="900" height="720"></canvas>
+      <h3 style="margin-top:14px">对应真实节点的日志</h3>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <div class="note small" id="hint">
+    <b>先玩这个：</b>切到 <code>aruco_search.xml</code>，点播放；飞起来后勾选「让标记出现在视野里」——
+    你会看到飞机停下悬停观察；再取消勾选，观察分支立刻被打断、回到巡逻。
+    然后把上面的「内层用」从 <code>ReactiveSequence</code> 换成 <code>Sequence</code> 再来一次，
+    你会看到<b>取消勾选后飞机还在傻站着把 5 秒悬停做完</b>。这就是本文第 4 节要讲的坑。
+  </div>
+</section>
+
+<!-- ==================== 2. 基本规则 ==================== -->
+<section>
+  <h2><span class="n">2</span>行为树的三条基本规则</h2>
+
+  <div class="cols">
+    <div>
+      <h3>规则一：每个节点被 tick 时返回三态之一</h3>
+      <table>
+        <tr><th>返回值</th><th>含义</th></tr>
+        <tr><td><code>SUCCESS</code></td><td>做完了，成功</td></tr>
+        <tr><td><code>FAILURE</code></td><td>做不了 / 失败了</td></tr>
+        <tr><td><code>RUNNING</code></td><td>还没做完，<b>下个 tick 接着做</b></td></tr>
+      </table>
+      <p class="small muted">条件节点只能返回前两个；动作节点三个都可以。</p>
+    </div>
+    <div>
+      <h3>规则二：tick 从根往下传播</h3>
+      <p class="small">主循环每 50&nbsp;ms 调一次 <code>tree.tickRoot()</code>，根节点把 tick 传给它<b>选中的</b>孩子，
+         返回值逐层汇总。整棵树的值 = 根节点的返回值。</p>
+      <p class="small">注意：<b>一帧只走一条路径</b>，不是所有节点都跑一遍。这一点上行为树和
+         <code>switch</code> 是一样的 —— 区别在"下一帧走哪条"由谁决定。</p>
+    </div>
+  </div>
+
+  <h3>规则三：节点分三类</h3>
+  <table>
+    <tr><th>类别</th><th>职责</th><th>本项目里的例子</th></tr>
+    <tr><td><b>控制节点</b></td><td>决定孩子的执行顺序，自己不干活</td>
+        <td><code>Sequence</code> <code>Fallback</code> <code>ReactiveSequence</code> <code>ReactiveFallback</code></td></tr>
+    <tr><td><b>装饰器</b></td><td>修饰<b>一个</b>孩子</td>
+        <td><code>RetryUntilSuccessful</code> <code>Timeout</code> <code>ForceSuccess</code>（框架自带）</td></tr>
+    <tr><td><b>叶子·条件</b></td><td>只读判断，必须瞬时返回，不能阻塞</td>
+        <td><code>IsArmed</code> <code>IsOffboard</code> <code>IsAtSetpoint</code> <code>IsTargetVisible</code></td></tr>
+    <tr><td><b>叶子·动作</b></td><td>真正干活，可以跨多个 tick</td>
+        <td><code>Takeoff</code> <code>Hover</code> <code>GotoRelative</code> <code>Orbit</code> <code>Land</code></td></tr>
+  </table>
+
+  <h3>两种控制节点的语义（关键）</h3>
+  <div class="cols">
+    <div>
+      <p class="small"><b>Sequence（顺序，<span class="pill cc">有记忆</span>）</b></p>
+      <pre class="small">从左到右 tick 孩子：
+  孩子 FAILURE → 整个 FAILURE（进度清零）
+  孩子 RUNNING → 整个 RUNNING
+                 <span class="k">并记住"我走到第几个孩子"</span>
+  孩子 SUCCESS → 下个 tick 去 tick 下一个孩子
+  全部 SUCCESS → SUCCESS</pre>
+      <p class="small muted">这个"记住位置"就是你不用手写 <code>wp_index_</code> 这类变量的原因。</p>
+    </div>
+    <div>
+      <p class="small"><b>Sequence vs ReactiveSequence</b></p>
+      <pre class="small"><span class="k">Sequence</span>          第 2 个孩子 RUNNING 后，
+                 第 1 个孩子<b>再也不会被 tick</b>
+<span class="k">ReactiveSequence</span> 每帧都从第 1 个孩子重新评估</pre>
+      <p class="small">口诀：<b>要持续监控的条件 → Reactive*；一步一步做完的流程 → 普通版。</b>
+        这是本项目最容易踩的坑，第 4 节有实测数据。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 3. 状态机 vs 行为树 ==================== -->
+<section>
+  <h2><span class="n">3</span>状态机 vs 行为树：到底「谁和谁」耦合了</h2>
+
+  <p>先把一个常见误解纠正掉：<b>状态机并不是"每个任务都判断一下要不要进入对应分支"。</b>
+     <code>switch</code> 是<b>按 <code>current_state</code> 精确匹配</b>，一轮循环只执行一个 <code>case</code>；
+     真正的"判断"发生在 <code>case</code> 的<b>末尾给 <code>flight_state_</code> 赋新值</b>的时候。
+     它也不比行为树"更扫描"——两者都是每帧只走一条路径。</p>
+
+  <p>所以真正的区别是：<b>"下一帧走哪条路径"由谁决定，以及"现在做到第几步"存在哪里。</b></p>
+
+  <h3>3.1 你原来的 <code>offboard_orbit.cpp</code>：一个变量扛了四件事</h3>
+  <pre class="small">enum FlightState { WAIT_FCU, ARM_OFFBOARD, TAKEOFF, HOVER, MOVE, ORBIT, LAND, DONE };
+FlightState flight_state_;   <span class="c">// ← 这一个变量同时表示：进度 + 行为 + 转移 + 异常</span>
+
+switch (flight_state_) {
+  case TAKEOFF: takeoff(); break;
+  case HOVER:   hover();   break;
+  ...
+}
+<span class="c">// 每个 step 函数的末尾，手写"下一步是谁"：</span>
+void hover() {
+  publishSetpoint(...);
+  if (过了 hover_time_) {
+      if (!waypoints_.empty()) { flight_state_ = MOVE; }   <span class="c">// ← 转移写在行为里</span>
+      else                     { enterOrbitOrLand(); }
+  }
+}</pre>
+
+  <h3>3.2 拆开看：四件事其实属于四个地方</h3>
+  <table>
+    <tr><th>职责</th><th>状态机写在哪</th><th>行为树写在哪</th></tr>
+    <tr>
+      <td><b>现在做到第几步</b><br><span class="small muted">（进度）</span></td>
+      <td><code>flight_state_</code> 枚举 + 手写跳转</td>
+      <td><code>Sequence</code> 的 <code>current_child_idx_</code>（框架持有）</td>
+    </tr>
+    <tr>
+      <td><b>这一步怎么做</b><br><span class="small muted">（行为）</span></td>
+      <td><code>case</code> 里调的 <code>takeoff()/hover()/move()</code>，都写在同一个类里</td>
+      <td>叶子节点类：<code>Takeoff</code> 只管起飞，<code>Orbit</code> 只管绕圈</td>
+    </tr>
+    <tr>
+      <td><b>什么时候进下一步</b><br><span class="small muted">（顺序）</span></td>
+      <td>散落在每个 <code>case</code> 末尾的 <code>flight_state_ = XXX</code></td>
+      <td>XML 里孩子的<b>先后顺序</b>，一眼看完</td>
+    </tr>
+    <tr>
+      <td><b>出异常怎么办</b><br><span class="small muted">（安全）</span></td>
+      <td>主循环里的 <code>if (flying() &amp;&amp; mode != "OFFBOARD")</code>，还要维护 <code>flying()</code></td>
+      <td>另写一棵子树（<code>ReactiveFallback</code>）或放在树外的看门狗里</td>
+    </tr>
+    <tr>
+      <td><b>进度数据</b></td>
+      <td>成员变量 <code>wp_index_</code> <code>phase_start_</code> <code>orbit_start_</code> <code>land_requested_</code></td>
+      <td>框架持有：节点的 <code>IDLE/RUNNING</code> 状态 + 顺序节点的索引</td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <b>「解耦」就是这个意思：</b>上面这张表的<b>每一行，从同一个 <code>switch</code> 里被搬到了不同的地方</b>。
+    改"顺序"不用碰"行为"，加"异常"不用碰"任务"，写"行为"的人不用知道整个流程长什么样。<br>
+    <b>判断标准非常朴素：加一个新需求，你要改几处代码？</b>
+  </div>
+
+  <h3>3.3 量化对比：加一个「电量低于 20% 立刻返航」</h3>
+  <div class="cols">
+    <div>
+      <p class="small"><b>状态机：改 C++、重新编译，4 个函数都要动</b></p>
+      <pre class="small"><span class="del">-</span> enum FlightState { ..., <span class="add">RTL</span> };
+<span class="del">-</span> bool flying() { ... <span class="add">|| flight_state_ == RTL</span>; }
+
+  void takeoff() {
+<span class="add">+   if (batteryLow()) { flight_state_ = RTL; return; }</span>
+    ...
+  }
+  void hover() {
+<span class="add">+   if (batteryLow()) { flight_state_ = RTL; return; }</span>
+    ...
+  }
+  void move()  { <span class="add">+ 同样一行</span> ... }
+  void orbit() { <span class="add">+ 同样一行</span> ... }
+
+<span class="add">+ case RTL: if (returnHome()) return; break;</span></pre>
+      <p class="small muted">而且返航结束后<b>回不到原来的步骤</b>——状态机没有"记住从哪来"的概念，
+         除非你再加一个 <code>state_before_rtl_</code> 变量。</p>
+    </div>
+    <div>
+      <p class="small"><b>行为树：加 3 行 XML，原有节点代码 0 改动</b></p>
+      <pre class="small">&lt;ReactiveFallback&gt;
+
+  &lt;Sequence&gt;              <span class="c">&lt;!-- 原来那棵树，一个字没动 --&gt;</span>
+    &lt;EnsureOffboard/&gt;
+    &lt;EnsureArmed/&gt;
+    &lt;Takeoff height="2.0"/&gt;
+    &lt;Hover duration="3.0"/&gt;
+    &lt;Orbit radius="3.0"/&gt;
+  &lt;/Sequence&gt;
+
+  <span class="add">&lt;Sequence&gt;              &lt;!-- 新增的异常分支 --&gt;
+    &lt;BatteryLow/&gt;
+    &lt;ReturnHome/&gt;
+  &lt;/Sequence&gt;</span>
+
+&lt;/ReactiveFallback&gt;</pre>
+      <p class="small muted">外层 <code>ReactiveFallback</code> 每帧先问"电量低不低"，低了就走返航分支，
+         任务分支被自动挂起（halt）；电量问题是瞬时的还能回去继续做。</p>
+    </div>
+  </div>
+
+  <h3>3.4 三种耦合的具体表现</h3>
+  <ol>
+    <li><b>顺序耦合</b>：状态机把"下一步是谁"写在每个 <code>case</code> 的末尾。
+        想在全球任一位置插一步，得找到所有指向它的边并改掉；行为树里顺序就是 XML 里节点的排列。</li>
+    <li><b>异常耦合</b>：状态机必须把"OFFBOARD 丢了怎么办"塞进任务循环，
+        还要维护 <code>flying()</code> 这种"哪些状态算飞行中"的知识——<b>安全逻辑被迫了解任务细节</b>。
+        行为树里异常是并列的一棵子树，任务树完全不知道安全逻辑的存在。</li>
+    <li><b>数据耦合</b>：状态机的"进度"是散落的成员变量（<code>wp_index_</code> 等），
+        每加一步就可能加一个变量、加一处初始化、加一处复位。行为树里进度由框架统一持有。</li>
+  </ol>
+
+  <div class="note warn">
+    <b>别忘了真正的"顺序流"长这样：</b>状态机的转移是<b>边</b>（谁指向谁），行为树的顺序是<b>树的形状</b>。
+    状态数一多，边会变成网状（N 个状态可能有 N² 条边）；树永远是树，
+    复杂度随"步骤数"线性增长，而不是随"状态组合"爆炸。
+  </div>
+</section>
+
+<!-- ==================== 4. 实测：那个坑 ==================== -->
+<section>
+  <h2><span class="n">4</span>实测：为什么我一开始把 <code>Sequence</code> 放在 <code>ReactiveFallback</code> 里是错的</h2>
+
+  <p>我最初写的 <code>aruco_search.xml</code> 是这样的（<b>错的</b>）：</p>
+  <pre class="small">&lt;ReactiveFallback&gt;
+  &lt;<span class="del">Sequence</span>&gt;                <span class="c">&lt;!-- ← 这里应该是 ReactiveSequence --&gt;</span>
+    &lt;IsTargetVisible timeout="0.5"/&gt;
+    &lt;Hover duration="5.0"/&gt;
+  &lt;/Sequence&gt;
+  &lt;Sequence name="方形巡逻"&gt; ... &lt;/Sequence&gt;
+&lt;/ReactiveFallback&gt;</pre>
+
+  <p><b>症状</b>：目标（ArUco 标记）从视野里消失后，飞机<b>不会</b>立刻回去巡逻，
+     而是硬把 5 秒悬停做完。看起来"<code>ReactiveFallback</code> 没起作用"。</p>
+
+  <p><b>原因</b>：<code>ReactiveFallback</code> 确实每帧都从<b>它的</b>孩子 0 开始评估，
+     但孩子 0 是一个 <code>Sequence</code>，而 <code>Sequence</code> <b>内部有记忆</b>：
+     它一旦推进到第 2 个孩子（<code>Hover</code>），第 1 个孩子（<code>IsTargetVisible</code>）
+     就<b>再也不会被 tick</b>。外层再怎么"从头评估"，里层还是从中间接着跑。</p>
+
+  <div class="note bad">
+    <b>一句话记住：</b><code>Reactive*</code> 的"反应式"<b>不会穿透</b>孩子。
+    你自己有记忆，就得自己负责每帧重新判断条件。
+  </div>
+
+  <h3>用真实 BehaviorTree.CPP 3.8.6 跑出来的数据</h3>
+  <p class="small">条件：目标在第 20 帧从视野消失，之后一直不可见。</p>
+  <table>
+    <tr><th>观察分支内层用</th><th>目标刚丢失（第 20 帧）</th><th>1.5 秒后</th><th>6.5 秒后</th></tr>
+    <tr>
+      <td><code>Sequence</code>（有记忆）</td>
+      <td style="color:var(--run)">Hover = RUNNING<br><span class="small">（还在傻悬停）</span></td>
+      <td style="color:var(--run)">Hover = RUNNING</td>
+      <td>Hover = IDLE<br><span class="small muted">5 秒跑完了才切走</span></td>
+    </tr>
+    <tr>
+      <td><code>ReactiveSequence</code></td>
+      <td style="color:var(--ok)">Hover = IDLE<br>巡逻已接管</td>
+      <td style="color:var(--ok)">巡逻中</td>
+      <td style="color:var(--ok)">巡逻中</td>
+    </tr>
+  </table>
+
+  <p class="small">另外还确认了一个容易搞错的细节：在 <code>ReactiveSequence</code> 里，
+     返回 <code>RUNNING</code> 的孩子是<b>继续跑</b>而不是每帧重来 ——
+     实测 <code>Hover duration="5.0"</code> 恰好持续 100 帧 @20Hz＝5.00 秒后才结束。
+     （但已返回 <code>SUCCESS</code> 的孩子会被重新 tick，所以官方文档明确警告：
+     <b>不要在 ReactiveSequence 里放有副作用的动作节点</b>。我们树里前几个孩子都是条件节点，安全。）</p>
+
+  <h3>还有一个必须知道的特性：任务结束后继续 tick ＝ 重跑</h3>
+  <p class="small"><code>Tree::tickRoot()</code> 在根节点返回 <code>SUCCESS/FAILURE</code> 后，
+     会把根节点状态<b>重置为 IDLE</b>。实测继续调用 <code>tickRoot()</code>：</p>
+  <pre class="small">tick 20: root=SUCCESS  hover=IDLE      <span class="c">&lt;-- 任务完成</span>
+tick 21: root=RUNNING  hover=RUNNING   <span class="c">&lt;-- 整棵树从头又跑了一遍！</span>
+tick 22: root=RUNNING  hover=RUNNING</pre>
+  <p class="small">所以 <code>offboard_bt.cpp</code> 的主循环一到终态就 <code>return</code> ——
+     不然飞机落地后会自己再起飞一次。你也可以在本页按「跳到结束」后再按几次「单步 tick」看到这个现象。</p>
+</section>
+
+<!-- ==================== 5. 优缺点 ==================== -->
+<section>
+  <h2><span class="n">5</span>优缺点：什么时候用哪个</h2>
+
+  <table>
+    <tr><th style="width:50%">状态机（switch-case）</th><th>行为树（BehaviorTree.CPP）</th></tr>
+    <tr>
+      <td>
+        <b style="color:var(--ok)">优点</b>
+        <ul class="small">
+          <li>状态少（&lt;5）时最直观，一眼看懂</li>
+          <li>零框架依赖，性能开销最小</li>
+          <li>调试最简单：打一个变量就知道在哪一步</li>
+          <li>可以在 <code>case</code> 里写阻塞代码，写起来随意</li>
+        </ul>
+        <b style="color:var(--fail)">缺点</b>
+        <ul class="small">
+          <li>状态 × 异常 → 跳转边爆炸（N² 级）</li>
+          <li>改流程＝改代码＝重新编译</li>
+          <li>流程没法复用，"巡逻"逻辑换个任务要复制一遍</li>
+          <li>持续监控（随时可能发生的异常）很别扭</li>
+          <li>流程只存在于代码里，非程序员无法参与</li>
+        </ul>
+      </td>
+      <td>
+        <b style="color:var(--ok)">优点</b>
+        <ul class="small">
+          <li><b>流程与实现解耦</b>：加步骤改 XML，不重编译</li>
+          <li>节点可复用、可组合、可嵌套成子树</li>
+          <li>天生支持反应式监控（Reactive*）与异常分支</li>
+          <li>进度由框架持有，不用手写一堆状态变量</li>
+          <li>可视化调试（Groot）/ 运行时热加载 XML</li>
+        </ul>
+        <b style="color:var(--fail)">缺点</b>
+        <ul class="small">
+          <li>多一层抽象，初学要理解 tick / 三态 / 记忆</li>
+          <li>节点必须<b>非阻塞快速返回</b>，写惯 <code>while</code> 的人容易踩坑</li>
+          <li>每帧从根走一遍，有开销（本项目 20Hz×十几个节点，可忽略）</li>
+          <li>"进度"是隐式的，不看可视化/日志不好排查</li>
+          <li>控制频率受 tick 频率限制，不适合做连续控制</li>
+        </ul>
+      </td>
+    </tr>
+  </table>
+
+  <div class="note">
+    <b>结论不是"行为树替代状态机"，而是分工：</b>
+    <ul class="small" style="margin-bottom:0">
+      <li><b>行为树</b>适合：任务步骤经常变、需要复用、需要随时监控异常 —— 也就是"<b>决策层</b>"。</li>
+      <li><b>状态机</b>适合：状态极少且稳定、或者干脆是硬件时序。</li>
+      <li><b>连续控制（PID/姿态/位置环）永远归飞控</b>，行为树只负责"飞去哪、什么时候飞"。</li>
+    </ul>
+    你这个项目正好卡在行为树的甜点上：飞行动作就那么几个（起飞/平移/环绕/降落），
+    但<b>任务编排会一直变</b>（对着陆点找标记、巡检、返航、多机协同），
+    所以"把动作做成节点、把编排交给 XML"收益最大。
+  </div>
+</section>
+
+<!-- ==================== 6. 怎么用 ==================== -->
+<section>
+  <h2><span class="n">6</span>后续怎么用这套东西</h2>
+
+  <h3>6.1 可用节点清单（XML 标签 ↔ 端口）</h3>
+  <p class="small muted">XML 里的<b>属性名就是端口名</b>；写了默认值的端口不填就用默认值；
+     没写默认值的（下面标 <span class="pill ro">可选</span>）不填时节点会自己换一种策略。</p>
+  <table>
+    <tr><th>标签</th><th>端口（默认值）</th><th>说明</th></tr>
+    <tr><td colspan="3" style="background:#101822; color:var(--accent2)"><b>条件节点</b>（只读，瞬时返回）</td></tr>
+    <tr><td><code>IsFcuConnected</code></td><td>—</td><td>MAVROS 是否连上飞控</td></tr>
+    <tr><td><code>IsArmed</code></td><td>—</td><td>是否已解锁</td></tr>
+    <tr><td><code>IsOffboard</code></td><td>—</td><td>是否处于 OFFBOARD</td></tr>
+    <tr><td><code>IsAtSetpoint</code></td><td><code>tol=0.3</code></td><td>当前位姿是否已到位（对比当前 setpoint）</td></tr>
+    <tr><td><code>IsTargetVisible</code></td><td><code>timeout=0.5</code></td><td><code>/aruco_down_cam/pose</code> 是否还有新鲜数据</td></tr>
+    <tr><td colspan="3" style="background:#101822; color:var(--accent2)"><b>动作节点</b></td></tr>
+    <tr><td><code>EnsureOffboard</code></td><td><code>timeout=10</code></td><td>一定要进 OFFBOARD：没进去就每秒重试，超时 FAILURE</td></tr>
+    <tr><td><code>EnsureArmed</code></td><td><code>timeout=10</code></td><td>一定要解锁，同上</td></tr>
+    <tr><td><code>Arm</code> / <code>Disarm</code></td><td>—</td><td>一次性解锁 / 上锁（幂等）</td></tr>
+    <tr><td><code>Takeoff</code></td><td><code>height=2.0</code> <code>tol=0.25</code> <code>timeout=30</code></td><td>起飞到离地 <code>height</code>（相对起飞点地面）</td></tr>
+    <tr><td><code>Hover</code></td><td><code>duration=3.0</code></td><td>原地保持当前 setpoint</td></tr>
+    <tr><td><code>GotoRelative</code></td><td><code>x=0</code> <code>y=0</code> <code>z=0</code> <code>yaw</code><span class="pill ro">可选</span> <code>tol=0.3</code> <code>timeout=20</code></td><td>相对起飞点平移；不写 <code>yaw</code> 就机头朝运动方向</td></tr>
+    <tr><td><code>Orbit</code></td><td><code>radius=3</code> <code>speed=1</code> <code>laps=1</code> <code>clockwise=false</code> <code>face_tangent=true</code> <code>z</code><span class="pill ro">可选</span></td><td>以起飞点为圆心绕圈；不写 <code>z</code> 就保持当前高度</td></tr>
+    <tr><td><code>Land</code></td><td><code>z_threshold=0.15</code> <code>timeout=60</code></td><td>请求 <code>AUTO.LAND</code> 并等落地</td></tr>
+    <tr><td colspan="3" style="background:#101822; color:var(--accent2)"><b>框架自带</b>（直接可用）</td></tr>
+    <tr><td><code>Sequence</code> <code>Fallback</code></td><td>—</td><td>有记忆的顺序 / 选择</td></tr>
+    <tr><td><code>ReactiveSequence</code> <code>ReactiveFallback</code></td><td>—</td><td>每帧重新评估，用于持续监控</td></tr>
+    <tr><td><code>Parallel</code> <code>IfThenElse</code> <code>WhileDoElse</code> <code>Switch</code></td><td>见官方文档</td><td>并行 / 条件分支</td></tr>
+    <tr><td><code>RetryUntilSuccessful</code> <code>Timeout</code> <code>Delay</code> <code>ForceSuccess</code> <code>Inverter</code> <code>SubTree</code></td><td>见官方文档</td><td>装饰器</td></tr>
+  </table>
+
+  <h3>6.2 四个常用模式（直接抄）</h3>
+  <div class="cols">
+    <div>
+      <p class="small"><b>① 顺序任务</b>（最常用）</p>
+      <pre class="small">&lt;Sequence&gt;
+  &lt;Takeoff height="2.0"/&gt;
+  &lt;GotoRelative x="5" y="0" z="2"/&gt;
+  &lt;Land/&gt;
+&lt;/Sequence&gt;</pre>
+
+      <p class="small"><b>② 永久监控 / 异常兜底</b></p>
+      <pre class="small">&lt;ReactiveFallback&gt;
+  &lt;Sequence&gt;  <span class="c">&lt;!-- 正常任务 --&gt;</span>
+    ...
+  &lt;/Sequence&gt;
+  &lt;Sequence&gt;  <span class="c">&lt;!-- 异常分支，可多个 --&gt;</span>
+    &lt;BatteryLow/&gt;
+    &lt;ReturnHome/&gt;
+  &lt;/Sequence&gt;
+&lt;/ReactiveFallback&gt;</pre>
+    </div>
+    <div>
+      <p class="small"><b>③ 重试 + 超时</b></p>
+      <pre class="small">&lt;RetryUntilSuccessful num_attempts="3"&gt;
+  &lt;Timeout msec="15000"&gt;
+    &lt;GotoRelative x="5" y="0" z="2"/&gt;
+  &lt;/Timeout&gt;
+&lt;/RetryUntilSuccessful&gt;</pre>
+
+      <p class="small"><b>④ 复用一段子任务</b></p>
+      <pre class="small">&lt;BehaviorTree ID="TakeoffAndHover"&gt;
+  &lt;Sequence&gt;&lt;Takeoff/&gt;&lt;Hover duration="2"/&gt;&lt;/Sequence&gt;
+&lt;/BehaviorTree&gt;
+
+<span class="c">&lt;!-- 别的树里引用 --&gt;</span>
+&lt;SubTree ID="TakeoffAndHover"/&gt;</pre>
+    </div>
+  </div>
+
+  <h3>6.3 加一个新动作节点（5 步）</h3>
+  <ol class="small">
+    <li>在 <code>src/bt_nodes.cpp</code> 选基类：持续多帧 → <code>BT::StatefulActionNode</code>；
+        一帧搞定 → <code>BT::SyncActionNode</code>；只读判断 → <code>BT::ConditionNode</code>。</li>
+    <li>构造函数里 <code>ctx_(ctxOf(config))</code> 拿上下文。</li>
+    <li>用 <code>static BT::PortsList providedPorts()</code> 声明端口（＝XML 属性）。</li>
+    <li>实现 <code>onStart/onRunning/onHalted</code>（或 <code>tick()</code>）。<b>禁止 while/sleep。</b></li>
+    <li>在文件末尾 <code>registerNodes()</code> 里加一行 <code>factory.registerNodeType&lt;你的类&gt;("标签名");</code>，
+        然后 <code>catkin_make</code>。</li>
+  </ol>
+  <p class="small muted">节点里能拿到：<code>ctx_-&gt;state</code>（飞控状态/位姿/视觉目标）、
+     <code>ctx_-&gt;streamer-&gt;set(x,y,z,yaw)</code>（下发指令）、<code>ctx_-&gt;origin_x/y/z</code>（起飞点）、
+     <code>ctx_-&gt;requestOffboard()</code>、<code>ctx_-&gt;setArmed()</code>。</p>
+
+  <h3>6.4 跑起来</h3>
+  <pre class="small"><span class="c"># 终端1~3：仿真链路（core 必须先起，锁定 use_sim_time）</span>
+bash scripts/run_sim.sh core
+bash scripts/run_sim.sh px4
+bash scripts/run_sim.sh mavros
+
+<span class="c"># 终端4：行为树控制（不需要 FAST-LIO）</span>
+roslaunch px4_control offboard_bt.launch
+roslaunch px4_control offboard_bt.launch tree_file:=$(rospack find px4_control)/behavior_trees/aruco_search.xml
+roslaunch px4_control offboard_bt.launch log_transitions:=true   <span class="c"># 打印每次状态跳变</span>
+roslaunch px4_control offboard_bt.launch exit_on_complete:=false <span class="c"># 落地后不退出</span></pre>
+</section>
+
+<!-- ==================== 7. 五个坑 ==================== -->
+<section>
+  <h2><span class="n">7</span>五个必须知道的坑</h2>
+  <table>
+    <tr><th style="width:30%">坑</th><th>后果 / 正确做法</th></tr>
+    <tr>
+      <td>在节点里写 <code>while</code> / <code>sleep</code> / 长阻塞</td>
+      <td>整个 tick 卡住 → 推流线程虽然还在发，但**任务反应变慢**、超时判断失真。
+          正确做法：把等待做成"每帧看一眼，没到就返回 RUNNING"。</td>
+    </tr>
+    <tr>
+      <td>条件节点返回 <code>RUNNING</code></td>
+      <td>条件节点必须瞬时给出结论；<code>SyncActionNode</code> 返回 RUNNING 框架会直接抛异常。</td>
+    </tr>
+    <tr>
+      <td><code>Sequence</code> 放进 <code>ReactiveFallback</code> 就以为"反应式"了</td>
+      <td>记忆不会穿透孩子，条件再也不会被重新判断（第 4 节实测）。
+          要用 <code>ReactiveSequence</code>。</td>
+    </tr>
+    <tr>
+      <td>任务结束后继续 <code>tickRoot()</code></td>
+      <td>根节点被重置为 IDLE，整棵树<b>从头重跑</b>（飞机会再起飞一次）。
+          主循环必须一到 <code>SUCCESS/FAILURE</code> 就退出。</td>
+    </tr>
+    <tr>
+      <td>拿行为树做连续控制</td>
+      <td>用错层次。位置/姿态/PID 环是飞控的事；行为树只决定"飞去哪、什么时候飞"。
+          想平滑跟踪轨迹，应该新增一个"轨迹跟踪"节点，而不是提高 tick 频率。</td>
+    </tr>
+  </table>
+</section>
+
+<div style="text-align:center; color:var(--tx3); font-size:12px; margin-top:40px">
+  docs/bt_visualizer.html · 语义对照 BehaviorTree.CPP 3.8.6 实测校验 ·
+  节点实现见 <code>src/px4_control/src/bt_nodes.cpp</code>
+</div>
+
+</main>
+
+<!-- ============================================================
+     核心仿真（纯逻辑，无 DOM 依赖 —— 可用 node 直接跑来做回归测试）
+     语义严格对照 BehaviorTree.CPP v3：
+       · Sequence 有记忆(current_child_idx_)，ReactiveSequence 无
+       · ReactiveFallback 每帧从孩子 0 评估，命中后 halt 后面的孩子
+       · StatefulActionNode: IDLE→onStart / RUNNING→onRunning / halt→onHalted
+       · tickRoot() 根节点返回终态后把根重置为 IDLE（＝继续 tick 会重跑）
+     ============================================================ -->
+<script id="bt-core">
+(function (root) {
+  'use strict';
+
+  var ST = { IDLE: 'IDLE', RUNNING: 'RUNNING', SUCCESS: 'SUCCESS', FAILURE: 'FAILURE' };
+
+  function num(v, d) { var x = parseFloat(v); return isFinite(x) ? x : d; }
+  function bool(v, d) {
+    if (v === undefined || v === null) return d;
+    if (typeof v === 'boolean') return v;
+    return String(v).toLowerCase() === 'true';
+  }
+  function setSp(w, x, y, z, yaw) {
+    w.setpoint.x = x; w.setpoint.y = y; w.setpoint.z = z; w.setpoint.yaw = yaw; w.setpoint.valid = true;
+  }
+
+  /* ---------------- 节点基类 ---------------- */
+  function Node(kind, name, ports) {
+    this.kind = kind; this.name = name || kind; this.ports = ports || {};
+    this.children = []; this.status = ST.IDLE; this.phase = ''; this._v = -1;
+  }
+  Node.prototype.add = function () { for (var i = 0; i < arguments.length; i++) this.children.push(arguments[i]); return this; };
+  Node.prototype.tick = function () { return ST.SUCCESS; };
+  Node.prototype.halt = function (w) {
+    this.status = ST.IDLE; this.phase = '';
+    for (var i = 0; i < this.children.length; i++) this.children[i].halt(w);
+  };
+  Node.prototype.reset = function () {
+    this.status = ST.IDLE; this.phase = ''; this._v = -1; this.detail = '';
+    for (var i = 0; i < this.children.length; i++) this.children[i].reset();
+  };
+  Node.prototype.walk = function (fn, d) {
+    fn(this, d || 0);
+    for (var i = 0; i < this.children.length; i++) this.children[i].walk(fn, (d || 0) + 1);
+  };
+
+  /* ---------------- 控制节点 ---------------- */
+  function Seq(name, reactive) {
+    Node.call(this, reactive ? 'ReactiveSequence' : 'Sequence', name, {});
+    this.reactive = !!reactive; this.cur = 0;
+  }
+  Seq.prototype = Object.create(Node.prototype); Seq.prototype.constructor = Seq;
+  Seq.prototype.haltFrom = function (i, w) { for (var j = i; j < this.children.length; j++) this.children[j].halt(w); };
+  Seq.prototype.tick = function (w) {
+    var k = this.children, i, st;
+    if (this.reactive) {
+      for (i = 0; i < k.length; i++) {
+        st = k[i].tick(w);
+        if (st === ST.RUNNING) { this.haltFrom(i + 1, w); this.status = ST.RUNNING; return ST.RUNNING; }
+        if (st === ST.FAILURE) { this.haltFrom(0, w); this.status = ST.FAILURE; return ST.FAILURE; }
+      }
+      this.status = ST.SUCCESS; return ST.SUCCESS;
+    }
+    for (i = this.cur; i < k.length; i++) {
+      st = k[i].tick(w);
+      if (st === ST.RUNNING) { this.cur = i; this.status = ST.RUNNING; return ST.RUNNING; }
+      if (st === ST.FAILURE) { this.cur = 0; this.status = ST.FAILURE; return ST.FAILURE; }
+    }
+    this.cur = 0; this.status = ST.SUCCESS; return ST.SUCCESS;
+  };
+  Seq.prototype.halt = function (w) {
+    if (this.status === ST.RUNNING && this.cur > 0 && w)
+      w.log('[halt] ' + this.name + ' 进度被清空 (' + (this.cur + 1) + '/' + this.children.length + ' → 1)', 'rep');
+    for (var i = 0; i < this.children.length; i++) this.children[i].halt(w);
+    this.cur = 0; this.status = ST.IDLE; this.phase = '';
+  };
+  Seq.prototype.reset = function () { Node.prototype.reset.call(this); this.cur = 0; };
+
+  function Fall(name, reactive) {
+    Node.call(this, reactive ? 'ReactiveFallback' : 'Fallback', name, {});
+    this.reactive = !!reactive; this.cur = 0;
+  }
+  Fall.prototype = Object.create(Node.prototype); Fall.prototype.constructor = Fall;
+  Fall.prototype.haltFrom = function (i, w) { for (var j = i; j < this.children.length; j++) this.children[j].halt(w); };
+  Fall.prototype.tick = function (w) {
+    var k = this.children, i, st;
+    if (this.reactive) {
+      for (i = 0; i < k.length; i++) {
+        st = k[i].tick(w);
+        if (st === ST.RUNNING) { this.haltFrom(i + 1, w); this.status = ST.RUNNING; return ST.RUNNING; }
+        if (st === ST.SUCCESS) { this.haltFrom(i + 1, w); this.status = ST.SUCCESS; return ST.SUCCESS; }
+      }
+      this.status = ST.FAILURE; return ST.FAILURE;
+    }
+    for (i = this.cur; i < k.length; i++) {
+      st = k[i].tick(w);
+      if (st === ST.RUNNING) { this.cur = i; this.status = ST.RUNNING; return ST.RUNNING; }
+      if (st === ST.SUCCESS) { this.cur = 0; this.status = ST.SUCCESS; return ST.SUCCESS; }
+    }
+    this.cur = 0; this.status = ST.FAILURE; return ST.FAILURE;
+  };
+  Fall.prototype.halt = function (w) {
+    for (var i = 0; i < this.children.length; i++) this.children[i].halt(w);
+    this.cur = 0; this.status = ST.IDLE; this.phase = '';
+  };
+  Fall.prototype.reset = function () { Node.prototype.reset.call(this); this.cur = 0; };
+
+  /* ---------------- 叶子节点 ---------------- */
+  function Cond(name, ports, fn) { Node.call(this, 'Condition', name, ports); this.fn = fn; }
+  Cond.prototype = Object.create(Node.prototype); Cond.prototype.constructor = Cond;
+  Cond.prototype.tick = function (w) { this.status = this.fn(w, this) ? ST.SUCCESS : ST.FAILURE; return this.status; };
+
+  function SyncAct(name, ports, fn) { Node.call(this, 'SyncAction', name, ports); this.fn = fn; }
+  SyncAct.prototype = Object.create(Node.prototype); SyncAct.prototype.constructor = SyncAct;
+  SyncAct.prototype.tick = function (w) { this.status = this.fn(w, this) ? ST.SUCCESS : ST.FAILURE; return this.status; };
+
+  function Stateful(name, ports, onStart, onRunning, onHalted) {
+    Node.call(this, 'StatefulAction', name, ports);
+    this._s = onStart; this._r = onRunning; this._h = onHalted || function () {};
+  }
+  Stateful.prototype = Object.create(Node.prototype); Stateful.prototype.constructor = Stateful;
+  Stateful.prototype.tick = function (w) {
+    var st;
+    if (this.status === ST.RUNNING) { this.phase = 'onRunning'; st = this._r(w, this); }
+    else { this.phase = 'onStart'; st = this._s(w, this); }
+    this.status = st;
+    if (st !== ST.RUNNING) this.phase = '';
+    return st;
+  };
+  Stateful.prototype.halt = function (w) {
+    if (this.status === ST.RUNNING) this._h(w, this);
+    this.status = ST.IDLE; this.phase = '';
+  };
+
+  /* ---------------- 世界 / 模拟被控对象 ---------------- */
+  function World(tickRate) {
+    this.tickRate = tickRate || 20; this.dt = 1 / this.tickRate;
+    this.frame = 0; this.t = 0;
+    this.pos = { x: 0, y: 0, z: 0 }; this.yaw = 0;
+    this.armed = false; this.mode = 'POSCTL'; this.connected = true;
+    this.setpoint = { x: 0, y: 0, z: 0, yaw: 0, valid: false };
+    this.origin = { x: 0, y: 0, z: 0 };
+    this.targetVisible = false; this.targetAt = -999;
+    this.speed = 2.0; this.trail = []; this.logs = [];
+    this.modeDelay = -1; this.armDelay = -1; this.offboardRecover = true;
+  }
+  World.prototype.log = function (m, cls) { this.logs.push({ tick: this.frame, msg: m, cls: cls || '' }); };
+  World.prototype.targetFresh = function (timeout) { return (this.t - this.targetAt) <= timeout; };
+  World.prototype.step = function () {
+    if (this.modeDelay > 0) { this.modeDelay--; if (this.modeDelay === 0) this.mode = 'OFFBOARD'; }
+    if (this.armDelay > 0) { this.armDelay--; if (this.armDelay === 0) this.armed = true; }
+
+    if (this.mode === 'AUTO.LAND') {
+      this.pos.z = Math.max(0, this.pos.z - 0.6 * this.dt);
+      if (this.pos.z <= 0.002) { this.pos.z = 0; this.armed = false; }
+    } else if (this.armed && this.setpoint.valid) {
+      var sp = this.setpoint;
+      var dx = sp.x - this.pos.x, dy = sp.y - this.pos.y, dz = sp.z - this.pos.z;
+      var d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d > 1e-9) {
+        var k = Math.min(1, this.speed * this.dt / d);
+        this.pos.x += dx * k; this.pos.y += dy * k; this.pos.z += dz * k;
+      }
+      this.yaw = sp.yaw;
+    }
+    this.frame++; this.t += this.dt;
+    if (this.frame % 3 === 0) this.trail.push({ x: this.pos.x, y: this.pos.y, z: this.pos.z });
+  };
+
+  /* ---------------- 节点库（对照 src/bt_nodes.cpp） ---------------- */
+  var N = {
+    IsFcuConnected: function (p) { return new Cond('IsFcuConnected', p, function (w) { return w.connected; }); },
+    IsArmed: function (p) { return new Cond('IsArmed', p, function (w) { return w.armed; }); },
+    IsOffboard: function (p) { return new Cond('IsOffboard', p, function (w) { return w.mode === 'OFFBOARD'; }); },
+    IsAtSetpoint: function (p) { return new Cond('IsAtSetpoint', p, function (w) {
+      if (!w.setpoint.valid) return false;
+      var tol = num(p.tol, 0.3), sp = w.setpoint;
+      return Math.sqrt(Math.pow(w.pos.x - sp.x, 2) + Math.pow(w.pos.y - sp.y, 2) + Math.pow(w.pos.z - sp.z, 2)) <= tol;
+    }); },
+    IsTargetVisible: function (p) { return new Cond('IsTargetVisible', p, function (w) {
+      return w.targetVisible && w.targetFresh(num(p.timeout, 0.5));
+    }); },
+
+    EnsureOffboard: function (p) { return new Stateful('EnsureOffboard', p,
+      function (w, n) {
+        n.t0 = w.t;
+        if (w.mode === 'OFFBOARD') { w.log('[BT] OFFBOARD active', 'ok'); return ST.SUCCESS; }
+        w.modeDelay = 3; w.log('[BT] requesting OFFBOARD ...', 'run');
+        return ST.RUNNING;
+      },
+      function (w, n) {
+        if (w.mode === 'OFFBOARD') { w.log('[BT] OFFBOARD active', 'ok'); return ST.SUCCESS; }
+        if (w.t - n.t0 > num(p.timeout, 10)) { w.log('[BT] timeout waiting for OFFBOARD (mode=' + w.mode + ')', 'warn'); return ST.FAILURE; }
+        return ST.RUNNING;
+      }); },
+
+    EnsureArmed: function (p) { return new Stateful('EnsureArmed', p,
+      function (w, n) {
+        n.t0 = w.t;
+        if (w.armed) { w.log('[BT] armed', 'ok'); return ST.SUCCESS; }
+        w.armDelay = 2; w.log('[BT] requesting arming ...', 'run');
+        return ST.RUNNING;
+      },
+      function (w, n) {
+        if (w.armed) { w.log('[BT] armed', 'ok'); return ST.SUCCESS; }
+        if (w.t - n.t0 > num(p.timeout, 10)) { w.log('[BT] arming timeout', 'warn'); return ST.FAILURE; }
+        return ST.RUNNING;
+      }); },
+
+    Arm: function (p) { return new SyncAct('Arm', p, function (w) {
+      if (w.armed) return true; w.armDelay = 2; return true; }); },
+    Disarm: function (p) { return new SyncAct('Disarm', p, function (w) {
+      if (!w.armed) return true; w.armed = false; return true; }); },
+
+    Takeoff: function (p) { return new Stateful('Takeoff', p,
+      function (w, n) {
+        n.tz = w.origin.z + num(p.height, 2.0); n.tol = num(p.tol, 0.25);
+        n.t0 = w.t; n.yaw = w.yaw;
+        w.log('[BT] Takeoff -> z = ' + n.tz.toFixed(2) + ' m');
+        return ST.RUNNING;
+      },
+      function (w, n) {
+        setSp(w, w.origin.x, w.origin.y, n.tz, n.yaw);
+        if (Math.abs(w.pos.z - n.tz) < n.tol) { w.log('[BT] Takeoff done (z = ' + w.pos.z.toFixed(2) + ')', 'ok'); return ST.SUCCESS; }
+        if (w.t - n.t0 > num(p.timeout, 30)) { w.log('[BT] Takeoff timeout', 'warn'); return ST.FAILURE; }
+        return ST.RUNNING;
+      }); },
+
+    Hover: function (p) { return new Stateful('Hover', p,
+      function (w, n) { n.dur = num(p.duration, 3.0); n.t0 = w.t; w.log('[BT] Hover ' + n.dur.toFixed(1) + ' s'); return ST.RUNNING; },
+      function (w, n) { return (w.t - n.t0 >= n.dur) ? ST.SUCCESS : ST.RUNNING; }); },
+
+    GotoRelative: function (p) { return new Stateful('GotoRelative', p,
+      function (w, n) {
+        n.tx = w.origin.x + num(p.x, 0); n.ty = w.origin.y + num(p.y, 0); n.tz = w.origin.z + num(p.z, 0);
+        n.tol = num(p.tol, 0.3); n.t0 = w.t;
+        n.hasYaw = (p.yaw !== undefined && p.yaw !== null); n.yaw = num(p.yaw, 0);
+        w.log('[BT] GotoRelative -> (' + n.tx.toFixed(2) + ', ' + n.ty.toFixed(2) + ', ' + n.tz.toFixed(2) + ')');
+        return ST.RUNNING;
+      },
+      function (w, n) {
+        var yaw = w.yaw;
+        if (n.hasYaw) yaw = n.yaw;
+        else {
+          var ddx = n.tx - w.pos.x, ddy = n.ty - w.pos.y;
+          if (Math.sqrt(ddx * ddx + ddy * ddy) > 0.2) yaw = Math.atan2(ddy, ddx);
+        }
+        setSp(w, n.tx, n.ty, n.tz, yaw);
+        var d = Math.sqrt(Math.pow(w.pos.x - n.tx, 2) + Math.pow(w.pos.y - n.ty, 2) + Math.pow(w.pos.z - n.tz, 2));
+        if (d < n.tol) { w.log('[BT] target reached (d = ' + d.toFixed(2) + ')', 'ok'); return ST.SUCCESS; }
+        if (w.t - n.t0 > num(p.timeout, 20)) { w.log('[BT] waypoint timeout (d = ' + d.toFixed(2) + ')', 'warn'); return ST.FAILURE; }
+        return ST.RUNNING;
+      }); },
+
+    Orbit: function (p) { return new Stateful('Orbit', p,
+      function (w, n) {
+        n.R = num(p.radius, 3); n.v = num(p.speed, 1); n.laps = num(p.laps, 1);
+        n.cw = bool(p.clockwise, false); n.ft = bool(p.face_tangent, true);
+        n.tz = (p.z !== undefined && p.z !== null) ? w.origin.z + num(p.z, 0) : w.pos.z;
+        n.omega = n.v / Math.max(n.R, 0.1); n.yaw0 = w.yaw; n.t0 = w.t;
+        w.log('[BT] Orbit R=' + n.R.toFixed(1) + 'm v=' + n.v.toFixed(1) + 'm/s laps=' + n.laps.toFixed(1));
+        return ST.RUNNING;
+      },
+      function (w, n) {
+        var t = w.t - n.t0, dir = n.cw ? -1 : 1, th = dir * n.omega * t;
+        var x = w.origin.x + n.R * Math.cos(th), y = w.origin.y + n.R * Math.sin(th);
+        setSp(w, x, y, n.tz, n.ft ? (th + dir * Math.PI / 2) : n.yaw0);
+        if (t >= Math.abs(n.laps) * 2 * Math.PI / n.omega) { w.log('[BT] Orbit done', 'ok'); return ST.SUCCESS; }
+        return ST.RUNNING;
+      }); },
+
+    Land: function (p) { return new Stateful('Land', p,
+      function (w, n) {
+        n.zth = num(p.z_threshold, 0.15); n.t0 = w.t;
+        w.offboardRecover = false; w.mode = 'AUTO.LAND';
+        w.log('[BT] AUTO.LAND requested', 'run');
+        return ST.RUNNING;
+      },
+      function (w, n) {
+        if (!w.armed) { w.log('[BT] disarmed, landing complete', 'ok'); return ST.SUCCESS; }
+        if (w.pos.z < n.zth) { w.log('[BT] landed (z = ' + w.pos.z.toFixed(2) + ')', 'ok'); return ST.SUCCESS; }
+        if (w.t - n.t0 > num(p.timeout, 60)) { w.log('[BT] landing timeout', 'warn'); return ST.FAILURE; }
+        return ST.RUNNING;
+      }); }
+  };
+
+  /* ---------------- 两棵示例树（对照 behavior_trees/*.xml） ---------------- */
+  var TREES = {
+    orbit: {
+      label: 'orbit_mission.xml',
+      build: function () {
+        return new Seq('mission', false).add(
+          N.EnsureOffboard({ timeout: 10 }),
+          N.EnsureArmed({ timeout: 10 }),
+          N.Takeoff({ height: 2.0, tol: 0.25, timeout: 30 }),
+          N.Hover({ duration: 3.0 }),
+          N.GotoRelative({ x: 2.0, y: 0.0, z: 2.0, tol: 0.3, timeout: 20 }),
+          N.GotoRelative({ x: 0.0, y: 0.0, z: 2.5, tol: 0.3, timeout: 20 }),
+          N.Orbit({ radius: 3.0, speed: 1.0, laps: 1.0, clockwise: false, face_tangent: true }),
+          N.Land({ z_threshold: 0.15, timeout: 60 })
+        );
+      },
+      marks: [
+        { type: 'circle', x: 0, y: 0, r: 3.0, color: '#38bdf8', label: 'Orbit R=3m' },
+        { type: 'wp', x: 2, y: 0 }, { type: 'wp', x: 0, y: 0 }
+      ],
+      bounds: [-4.5, 4.5, -4.5, 4.5]
+    },
+    aruco: {
+      label: 'aruco_search.xml',
+      build: function (opts) {
+        var reactive = !opts || opts.reactive !== false;
+        return new Seq('mission', false).add(
+          N.EnsureOffboard({ timeout: 10 }),
+          N.EnsureArmed({ timeout: 10 }),
+          N.Takeoff({ height: 1.5, tol: 0.25, timeout: 30 }),
+          new Fall('发现就观察否则继续巡逻', true).add(
+            new Seq('发现目标就停下观察', reactive).add(
+              N.IsTargetVisible({ timeout: 0.5 }),
+              N.Hover({ duration: 5.0 })
+            ),
+            new Seq('方形巡逻', false).add(
+              N.GotoRelative({ x: 2.0, y: 0.0, z: 1.5 }),
+              N.GotoRelative({ x: 2.0, y: 2.0, z: 1.5 }),
+              N.GotoRelative({ x: 0.0, y: 2.0, z: 1.5 }),
+              N.GotoRelative({ x: 0.0, y: 0.0, z: 1.5 })
+            )
+          ),
+          N.Land({ z_threshold: 0.15, timeout: 60 })
+        );
+      },
+      marks: [
+        { type: 'square', pts: [[0, 0], [2, 0], [2, 2], [0, 2]], color: '#a78bfa', label: '巡逻航线' }
+      ],
+      bounds: [-3, 4.5, -3, 4.5]
+    }
+  };
+
+  /* ---------------- 引擎 ---------------- */
+  function Engine(name, opts) {
+    this.opts = opts || {}; this.name = name;
+    this.build();
+  }
+  Engine.prototype.build = function () {
+    this.world = new World(20);
+    this.tree = TREES[this.name].build({ reactive: this.opts.reactive });
+    this.world.log('[BT] 行为树已加载，开始执行', 'rep');
+    this.finished = false; this.result = null;
+    // 给每个节点包一层，记录"本帧被 tick 过"
+    var self = this;
+    this.tree.walk(function (n) {
+      var orig = n.tick;
+      n.tick = function (w) { n._v = w.frame; return orig.call(n, w); };
+    });
+    this.pending = [];
+    return this;
+  };
+  Engine.prototype.reset = function () { this.build(); };
+  Engine.prototype.step = function () {
+    if (this.finished) return this.result;
+    var w = this.world;
+    w.step();
+    if (w.targetVisible) w.targetAt = w.t;
+    var st = this.tree.tick(w);
+    this.drain();
+    if (st === ST.SUCCESS || st === ST.FAILURE) {
+      this.finished = true; this.result = st;
+      w.log(st === ST.SUCCESS ? 'mission complete (SUCCESS)' : 'mission FAILED (FAILURE)', st === ST.SUCCESS ? 'ok' : 'warn');
+      this.tree.status = ST.IDLE;   // ← Tree::tickRoot() 的真实行为：根重置为 IDLE
+    }
+    this.drain();
+    return st;
+  };
+  Engine.prototype.drain = function () {
+    var L = this.world.logs;
+    while (L.length) this.pending.push(L.shift());
+  };
+  Engine.prototype.runToEnd = function (maxTicks) {
+    var n = maxTicks || 5000;
+    while (!this.finished && n-- > 0) this.step();
+    return this.finished ? this.result : null;
+  };
+  /// 到终态后继续 tick（用于演示"重跑"）
+  Engine.prototype.forceTick = function () {
+    this.tree.tick(this.world); this.drain(); return this.tree.status;
+  };
+
+  root.BTCore = { ST: ST, Engine: Engine, TREES: TREES, Node: Node, Seq: Seq, Fall: Fall, num: num, bool: bool };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+
+<!-- ============================================================
+     UI 层（依赖 DOM，node 里不会执行）
+     ============================================================ -->
+<script>
+(function () {
+  'use strict';
+  if (typeof document === 'undefined') return;
+
+  var ST = BTCore.ST;
+  var $ = function (id) { return document.getElementById(id); };
+  var engine = null, playing = false, lastTs = 0, acc = 0;
+
+  /* ---------------- 树渲染 ---------------- */
+  function portsText(n) {
+    var ks = Object.keys(n.ports);
+    if (!ks.length) return '';
+    return ks.map(function (k) { return k + '=' + n.ports[k]; }).join(' ');
+  }
+  function renderNode(n) {
+    var wrap = document.createElement('div'); wrap.className = 'tnode';
+    var card = document.createElement('div');
+    card.className = 'card st-' + n.status + (n._v === engine.world.frame ? ' hot' : '');
+    card.dataset.node = n.name;
+
+    var badge = '';
+    if (n.kind === 'Sequence' || n.kind === 'ReactiveSequence' || n.kind === 'Fallback' || n.kind === 'ReactiveFallback') {
+      var tot = n.children.length;
+      if (n.reactive) badge = '<span class="badge">每帧重评</span>';
+      if (n.status === ST.RUNNING || n.cur > 0) {
+        badge += '<span class="badge"><span class="curmark">▶ 第 ' + (n.cur + 1) + '/' + tot + ' 个孩子</span></span>';
+      }
+    } else if (n.kind === 'StatefulAction' && n.phase) {
+      badge = '<span class="badge">' + n.phase + '()</span>';
+    }
+    card.innerHTML =
+      '<span class="kind">' + n.kind + '</span>' +
+      '<span class="nm">' + n.name + '</span>' +
+      (portsText(n) ? '<span class="ports">' + portsText(n) + '</span>' : '') +
+      badge +
+      '<span class="badge" style="border-color:' + colorOf(n.status) + ';color:' + colorOf(n.status) + '">' + n.status + '</span>';
+
+    wrap.appendChild(card);
+    if (n.children.length) {
+      var kids = document.createElement('div'); kids.className = 'kids';
+      n.children.forEach(function (c) { kids.appendChild(renderNode(c)); });
+      wrap.appendChild(kids);
+    }
+    return wrap;
+  }
+  function colorOf(s) {
+    return s === ST.SUCCESS ? 'var(--ok)' : s === ST.FAILURE ? 'var(--fail)'
+         : s === ST.RUNNING ? 'var(--run)' : 'var(--idle)';
+  }
+  function renderTree() {
+    var v = $('tree-view'); v.innerHTML = '';
+    v.appendChild(renderNode(engine.tree));
+  }
+
+  /* ---------------- HUD + 日志 ---------------- */
+  function renderHud() {
+    var w = engine.world, p = w.pos, sp = w.setpoint;
+    $('hud').innerHTML =
+      row('位置 (x,y,z)', p.x.toFixed(2) + ', ' + p.y.toFixed(2) + ', ' + p.z.toFixed(2) + ' m') +
+      row('偏航 yaw', (w.yaw * 180 / Math.PI).toFixed(0) + '°') +
+      row('当前 setpoint', sp.valid ? (sp.x.toFixed(2) + ', ' + sp.y.toFixed(2) + ', ' + sp.z.toFixed(2)) : '—') +
+      row('模式 / 解锁', w.mode + ' / ' + (w.armed ? 'armed' : 'disarmed')) +
+      row('标记可见', w.targetVisible ? '是' : '否') +
+      row('root 状态', engine.finished ? engine.result : ST.RUNNING);
+    $('stat-tick').textContent = w.frame;
+    $('stat-time').textContent = w.t.toFixed(1);
+    $('stat-root').textContent = engine.finished ? engine.result : engine.tree.status;
+  }
+  function row(k, v) { return '<div class="k">' + k + '</div><div class="v">' + v + '</div>'; }
+
+  function appendLogs() {
+    var box = $('log'), added = false;
+    while (engine.pending.length) {
+      var e = engine.pending.shift();
+      var d = document.createElement('div');
+      d.innerHTML = '<span class="t">tick ' + String(e.tick).padStart(4, ' ') + '</span>  ' +
+                    '<span class="' + e.cls + '">' + e.msg + '</span>';
+      box.appendChild(d); added = true;
+      while (box.childNodes.length > 300) box.removeChild(box.firstChild);
+    }
+    if (added) box.scrollTop = box.scrollHeight;
+  }
+
+  /* ---------------- 俯视图 ---------------- */
+  function draw() {
+    var cv = $('map'), ctx = cv.getContext('2d');
+    var W = cv.width, H = cv.height, w = engine.world;
+    ctx.clearRect(0, 0, W, H);
+    var b = BTCore.TREES[engine.name].bounds;
+    var minX = b[0], maxX = b[1], minY = b[2], maxY = b[3];
+    // 把真实轨迹也纳入视野
+    w.trail.forEach(function (p) {
+      minX = Math.min(minX, p.x - 0.5); maxX = Math.max(maxX, p.x + 0.5);
+      minY = Math.min(minY, p.y - 0.5); maxY = Math.max(maxY, p.y + 0.5);
+    });
+    var pad = 30, sc = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxY - minY));
+    var ox = pad + (W - pad * 2 - (maxX - minX) * sc) / 2;
+    var oy = pad + (H - pad * 2 - (maxY - minY) * sc) / 2;
+    var X = function (x) { return ox + (x - minX) * sc; };
+    var Y = function (y) { return H - (oy + (y - minY) * sc); };   // y 轴朝上
+
+    // 网格
+    ctx.strokeStyle = '#182430'; ctx.lineWidth = 1;
+    for (var g = Math.ceil(minX); g <= maxX; g++) { ctx.beginPath(); ctx.moveTo(X(g), 0); ctx.lineTo(X(g), H); ctx.stroke(); }
+    for (var g2 = Math.ceil(minY); g2 <= maxY; g2++) { ctx.beginPath(); ctx.moveTo(0, Y(g2)); ctx.lineTo(W, Y(g2)); ctx.stroke(); }
+
+    // 装饰
+    (BTCore.TREES[engine.name].marks || []).forEach(function (m) {
+      ctx.strokeStyle = m.color; ctx.lineWidth = 2;
+      if (m.type === 'circle') {
+        ctx.beginPath(); ctx.arc(X(m.x), Y(m.y), m.r * sc, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = m.color; ctx.font = '16px monospace';
+        ctx.fillText(m.label, X(m.x + m.r) + 6, Y(m.y) - 6);
+      } else if (m.type === 'square') {
+        ctx.beginPath();
+        m.pts.forEach(function (p, i) { i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])); });
+        ctx.closePath(); ctx.stroke();
+        ctx.fillStyle = m.color; ctx.font = '16px monospace';
+        ctx.fillText(m.label, X(m.pts[0][0]) + 8, Y(m.pts[0][1]) + 20);
+        m.pts.forEach(function (p) {
+          ctx.fillStyle = m.color; ctx.fillRect(X(p[0]) - 4, Y(p[1]) - 4, 8, 8);
+        });
+      } else if (m.type === 'wp') {
+        ctx.fillStyle = '#38bdf8'; ctx.fillRect(X(m.x) - 4, Y(m.y) - 4, 8, 8);
+      }
+    });
+
+    // 起飞点
+    ctx.strokeStyle = '#8fa3b8'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(X(w.origin.x) - 8, Y(w.origin.y)); ctx.lineTo(X(w.origin.x) + 8, Y(w.origin.y));
+    ctx.moveTo(X(w.origin.x), Y(w.origin.y) - 8); ctx.lineTo(X(w.origin.x), Y(w.origin.y) + 8); ctx.stroke();
+
+    // 轨迹
+    if (w.trail.length > 1) {
+      ctx.strokeStyle = 'rgba(16,185,129,.85)'; ctx.lineWidth = 2; ctx.beginPath();
+      w.trail.forEach(function (p, i) { i ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y)); });
+      ctx.stroke();
+    }
+
+    // setpoint 十字
+    if (w.setpoint.valid) {
+      var sx = X(w.setpoint.x), sy = Y(w.setpoint.y);
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(sx - 9, sy); ctx.lineTo(sx + 9, sy);
+      ctx.moveTo(sx, sy - 9); ctx.lineTo(sx, sy + 9); ctx.stroke();
+    }
+
+    // 标记
+    if (w.targetVisible) {
+      ctx.fillStyle = '#a78bfa';
+      ctx.beginPath(); ctx.arc(X(1.0), Y(1.0), 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#dbe4ee'; ctx.font = '15px monospace';
+      ctx.fillText('ArUco', X(1.0) + 14, Y(1.0) + 5);
+    }
+
+    // 飞机
+    var px = X(w.pos.x), py = Y(w.pos.y);
+    ctx.save(); ctx.translate(px, py); ctx.rotate(-w.yaw);
+    ctx.fillStyle = w.armed ? '#38bdf8' : '#5f7285';
+    ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-9, 8); ctx.lineTo(-4, 0); ctx.lineTo(-9, -8);
+    ctx.closePath(); ctx.fill(); ctx.restore();
+    ctx.fillStyle = '#8fa3b8'; ctx.font = '14px monospace';
+    ctx.fillText('z=' + w.pos.z.toFixed(2) + 'm', px + 14, py + 24);
+  }
+
+  /* ---------------- 刷新 ---------------- */
+  function refresh() { renderTree(); renderHud(); appendLogs(); draw(); }
+  function stepOnce() { engine.step(); refresh(); }
+
+  function setPlaying(on) {
+    playing = on;
+    $('btn-play').textContent = on ? '⏸ 暂停' : '▶ 播放';
+    lastTs = 0; acc = 0;
+  }
+
+  function loop(ts) {
+    if (playing) {
+      if (!lastTs) lastTs = ts;
+      var dt = (ts - lastTs) / 1000; lastTs = ts;
+      var tps = parseInt($('speed').value, 10);     // ticks per second
+      acc += dt * tps;
+      var guard = 0;
+      while (acc >= 1 && guard++ < 400) {
+        acc -= 1;
+        engine.step();
+        if (engine.finished) { setPlaying(false); break; }
+      }
+      refresh();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------------- 事件 ---------------- */
+  function rebuild() {
+    setPlaying(false);
+    var name = $('tree-select').value;
+    var reactive = $('seq-mode').value === 'reactive';
+    engine = new BTCore.Engine(name, { reactive: reactive });
+    engine.world.targetVisible = $('marker-toggle').checked;
+    $('log').innerHTML = '';
+    refresh();
+  }
+
+  $('tree-select').addEventListener('change', function () {
+    $('seq-wrap').style.display = this.value === 'aruco' ? 'inline' : 'none';
+    $('marker-toggle').checked = false;
+    rebuild();
+  });
+  $('seq-mode').addEventListener('change', rebuild);
+  $('marker-toggle').addEventListener('change', function () {
+    engine.world.targetVisible = this.checked;
+    engine.world.log('[模拟] 标记' + (this.checked ? '进入' : '离开') + '视野', 'rep');
+    refresh();
+  });
+  $('btn-step').addEventListener('click', function () {
+    setPlaying(false);
+    if (engine.finished) { engine.forceTick(); engine.world.log('⚠️ 任务已结束，你又 tick 了一次 —— 整棵树从头重跑！', 'warn'); }
+    else stepOnce();
+    refresh();
+  });
+  $('btn-play').addEventListener('click', function () {
+    if (engine.finished) rebuild();
+    setPlaying(!playing);
+  });
+  $('btn-end').addEventListener('click', function () {
+    setPlaying(false); engine.runToEnd(8000); refresh();
+  });
+  $('btn-reset').addEventListener('click', rebuild);
+
+  /* ---------------- 启动 ---------------- */
+  $('seq-wrap').style.display = 'none';
+  rebuild();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

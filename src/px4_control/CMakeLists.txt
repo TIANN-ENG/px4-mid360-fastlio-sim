@@ -1,16 +1,21 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(px4_control)
 
-## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+## 行为树 / BT 节点用到 C++14（BehaviorTree.CPP v3 要求 >= C++11）
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
+## behaviortree_cpp_v3：行为树核心库（sudo apt install ros-noetic-behaviortree-cpp-v3）
+## roslib：offboard_bt 用 ros::package::getPath() 找默认的 XML 行为树
 find_package(catkin REQUIRED COMPONENTS
+  behaviortree_cpp_v3
   geometry_msgs
   mavros_msgs
   roscpp
+  roslib
   rospy
 )
 
@@ -104,9 +109,9 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+  INCLUDE_DIRS include
 #  LIBRARIES px4_control
-#  CATKIN_DEPENDS geometry_msgs mavros_msgs roscpp rospy
+  CATKIN_DEPENDS behaviortree_cpp_v3 geometry_msgs mavros_msgs roscpp roslib rospy
 #  DEPENDS system_lib
 )
 
@@ -117,7 +122,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -226,8 +231,21 @@ target_link_libraries(offboard_orbit
     ${catkin_LIBRARIES}
 )
 
+# 行为树驱动的 Offboard 控制：任务流程写在 behavior_trees/*.xml 里
+add_executable(offboard_bt
+    src/offboard_bt.cpp
+    src/bt_nodes.cpp
+)
+target_link_libraries(offboard_bt
+    ${catkin_LIBRARIES}
+)
+
 install(DIRECTORY launch/
     DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)
+
+install(DIRECTORY behavior_trees/
+    DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/behavior_trees
 )
 
 # 视觉处理节点（ArUco 检测与位姿解算）与 ArUco 纹理生成脚本

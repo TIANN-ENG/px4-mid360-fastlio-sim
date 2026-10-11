@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<!--
+  示例任务树：起飞 -> 悬停 -> 平移两个航点 -> 环绕一圈 -> 自动降落
+  等价于原来的 offboard_orbit 节点，但流程改在 XML 里，不用重编译。
+
+  坐标系：所有 x/y/z 都相对【起飞点】（节点启动时记录的位姿），z 相对地面。
+  节点名与端口见 src/bt_nodes.cpp 里的 providedPorts()。
+
+  运行：rosrun px4_control offboard_bt _tree_file:=$(rospack find px4_control)/behavior_trees/orbit_mission.xml
+-->
+<root BTCPP_format="3" main_tree_to_execute="OrbitMission">
+
+  <BehaviorTree ID="OrbitMission">
+    <Sequence name="mission">
+
+      <!-- 1. 进入 OFFBOARD 并解锁：切不过去/解不开就一直等，超时才失败 -->
+      <EnsureOffboard timeout="10"/>
+      <EnsureArmed    timeout="10"/>
+
+      <!-- 2. 起飞到离地 2m -->
+      <Takeoff height="2.0" tol="0.25" timeout="30"/>
+
+      <!-- 3. 原地悬停 3s -->
+      <Hover duration="3.0"/>
+
+      <!-- 4. 相对起飞点平移：东 2m -> 升到 2.5m -->
+      <!--    不写 yaw 端口 = 机头自动朝运动方向 -->
+      <GotoRelative x="2.0" y="0.0" z="2.0" tol="0.3" timeout="20"/>
+      <GotoRelative x="0.0" y="0.0" z="2.5" tol="0.3" timeout="20"/>
+
+      <!-- 5. 以起飞点为圆心绕一圈；不写 z 端口 = 保持当前高度 -->
+      <Orbit radius="3.0" speed="1.0" laps="1.0" clockwise="false" face_tangent="true"/>
+
+      <!-- 6. AUTO.LAND 交给 PX4 自己降落 -->
+      <Land z_threshold="0.15" timeout="60"/>
+
+    </Sequence>
+  </BehaviorTree>
+
+</root>

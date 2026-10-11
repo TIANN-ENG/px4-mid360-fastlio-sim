@@ -44,7 +44,7 @@
 ~/catkin_ws/                    # 仓库根 = catkin 工作空间
 ├── src/                        # catkin 源码空间
 │   ├── iris_description/       # 本仓库：模型描述 / mavros TF / launch
-│   ├── px4_control/            # 本仓库：Offboard 控制示例
+│   ├── px4_control/            # 本仓库：Offboard 控制（状态机示例 + 行为树）
 │   ├── FAST_LIO/               # 第三方（deps.repos 拉取，仓库内被 .gitignore）
 │   ├── Mid360_px4_sim_plugin/  # 第三方（deps.repos 拉取，含雷达插件与模型）
 │   └── livox_ros_driver2/      # 第三方（可选，仅真机用）
@@ -62,7 +62,8 @@
 sudo apt install git tmux python3-pip python3-vcstool \
                  ros-noetic-mavros ros-noetic-mavros-extras \
                  ros-noetic-gazebo-ros ros-noetic-gazebo-ros-pkgs \
-                 ros-noetic-rviz libeigen3-dev libpcl-dev
+                 ros-noetic-rviz ros-noetic-behaviortree-cpp-v3 \
+                 libeigen3-dev libpcl-dev
 ```
 
 > ⚠️ 装了 conda / anaconda 的话，**每开一个新终端先 `conda deactivate`**。
@@ -140,7 +141,24 @@ rosrun tf tf_echo odom base_link  # TF 链路
 ```bash
 rosrun px4_control offboard_takeoff
 rosrun px4_control offboard_position_control
+rosrun px4_control offboard_orbit
 ```
+
+**行为树驱动**（任务流程写在 XML 里，改流程不用重编译）：
+
+```bash
+roslaunch px4_control offboard_bt.launch
+roslaunch px4_control offboard_bt.launch tree_file:=$(rospack find px4_control)/behavior_trees/aruco_search.xml
+rosrun   px4_control offboard_bt _log_transitions:=true    # 打印节点状态跳变
+```
+
+节点清单 / 架构 / 怎么加自己的节点，见
+[src/px4_control/README.md](src/px4_control/README.md)。
+
+🎬 **行为树可视化**：[docs/bt_visualizer.html](docs/bt_visualizer.html) ——
+浏览器直接打开（单文件、无需联网），可以一帧一帧看行为树怎么执行、
+看 `Sequence` 与 `ReactiveSequence` 的实测差别、看行为树和 `switch` 状态机到底哪里解耦。
+想理解"行为树是什么、和我原来的状态机差在哪"，先看它。
 
 ### 6. 结束
 

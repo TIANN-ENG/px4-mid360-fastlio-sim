@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!--
+  示例任务树：边巡逻边找 ArUco 标记，看到就停下来观察，看不到就继续巡逻，最后降落。
+
+  这棵树演示了行为树相对状态机的核心优势 —— 【反应式】：
+  ReactiveFallback 每个 tick 都重新评估左边的条件，所以"目标消失"能立刻打断悬停、
+  自动回到巡逻分支，不需要在 C++ 里为每种组合写状态跳转。
+
+  ⚠️ 但你【不能】把里面的 ReactiveSequence 换成 Sequence（这是最容易踩的坑）：
+     Sequence 是"有记忆"的 —— 它一旦推进到第 2 个孩子（Hover），第 1 个孩子
+     （IsTargetVisible）就再也不会被 tick 了。此时外层 ReactiveFallback 虽然每次
+     都从头评估，但从头的那个孩子内部仍有记忆，所以"目标丢了"根本发现不了，
+     会硬把 5 秒悬停做完才切走。
+     口诀：要持续监控的条件 → ReactiveSequence / ReactiveFallback；
+           一步一步做完的流程   → Sequence / Fallback。
+     详见 docs/bt_visualizer.html（里面有实测数据和对比动画）。
+
+  依赖：/aruco_down_cam/pose 有数据（roslaunch px4_control aruco_vision.launch）
+-->
+<root BTCPP_format="3" main_tree_to_execute="SearchAndInspect">
+
+  <BehaviorTree ID="SearchAndInspect">
+    <Sequence name="mission">
+
+      <EnsureOffboard timeout="10"/>
+      <EnsureArmed    timeout="10"/>
+      <Takeoff height="1.5" tol="0.25" timeout="30"/>
+
+      <!-- 反应式回退：每个 tick 先看"目标在不在" -->
+      <ReactiveFallback name="发现就观察否则继续巡逻">
+
+        <!-- 1) 目标可见 -> 悬停观察；中途目标丢了，这一支立刻失败并被打断
+             ⚠️ 这里必须是 ReactiveSequence，不能换成 Sequence：
+                Sequence 有记忆，推进到 Hover 之后就不会再回头 tick IsTargetVisible，
+                结果是"目标丢了也发现不了"，会硬把 5 秒悬停做完。
+                ReactiveSequence 每 tick 重新判断条件，条件失效立刻 FAILURE 并 halt Hover。
+                实测结论见 docs/bt_visualizer.html -->
+        <ReactiveSequence name="发现目标就停下观察">
+          <IsTargetVisible timeout="0.5"/>
+          <Hover duration="5.0"/>
+        </ReactiveSequence>
+
+        <!-- 2) 目标不可见 -> 走一个方形巡逻航线（按顺序飞完 4 个航点） -->
+        <Sequence name="方形巡逻">
+          <GotoRelative x="2.0" y="0.0" z="1.5"/>
+          <GotoRelative x="2.0" y="2.0" z="1.5"/>
+          <GotoRelative x="0.0" y="2.0" z="1.5"/>
+          <GotoRelative x="0.0" y="0.0" z="1.5"/>
+        </Sequence>
+
+      </ReactiveFallback>
+
+      <Land z_threshold="0.15" timeout="60"/>
+
+    </Sequence>
+  </BehaviorTree>
+
+</root>

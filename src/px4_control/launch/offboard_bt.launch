@@ -1,0 +1,27 @@
+<launch>
+  <!-- 行为树驱动的 Offboard 控制：
+         任务流程写在 XML 里，改流程不用重新编译。
+
+       用法：
+         roslaunch px4_control offboard_bt.launch
+         roslaunch px4_control offboard_bt.launch tree_file:=$(rospack find px4_control)/behavior_trees/aruco_search.xml
+         roslaunch px4_control offboard_bt.launch log_transitions:=true
+  -->
+  <arg name="tree_file" default="$(find px4_control)/behavior_trees/orbit_mission.xml"/>
+  <arg name="tick_rate"         default="20.0"/>  <!-- 行为树 tick 频率 Hz -->
+  <arg name="stream_rate"       default="50.0"/>  <!-- setpoint 发布频率 Hz，必须 > 2 -->
+  <arg name="prestream_time"    default="2.0"/>   <!-- 切 OFFBOARD 前的预推流秒数 -->
+  <arg name="watchdog"          default="true"/>  <!-- 飞行中丢 OFFBOARD 是否自动抢回 -->
+  <arg name="exit_on_complete"  default="true"/>  <!-- 任务结束后是否退出进程 -->
+  <arg name="log_transitions"   default="false"/> <!-- 打印每次节点状态跳变 -->
+
+  <node pkg="px4_control" type="offboard_bt" name="offboard_bt" output="screen">
+    <param name="tree_file"        value="$(arg tree_file)"/>
+    <param name="tick_rate"        value="$(arg tick_rate)"/>
+    <param name="stream_rate"      value="$(arg stream_rate)"/>
+    <param name="prestream_time"   value="$(arg prestream_time)"/>
+    <param name="watchdog"         value="$(arg watchdog)"/>
+    <param name="exit_on_complete" value="$(arg exit_on_complete)"/>
+    <param name="log_transitions"  value="$(arg log_transitions)"/>
+  </node>
+</launch>
